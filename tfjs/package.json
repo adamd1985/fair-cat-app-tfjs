@@ -26,10 +26,7 @@
   "dependencies": {
     "@tensorflow/tfjs": "^4.6.0",
     "@tensorflow/tfjs-node": "^4.6.0",
-    "@tensorflow/tfjs-vis": "^1.5.1",
-    "nodeplotlib": "^1.1.2",
-    "plotly": "^1.0.6",
-    "plotly.js-dist": "^2.23.1"
+    "nodeplotlib": "^1.1.2"
   },
   "private": true
 }

@@ -9,7 +9,7 @@ import Plot from 'nodeplotlib';
 const { tidy, tensor2d } = tf;
 
 // Constants
-const BRANDS = ['Whiskers', 'Royal Feline', 'Meowarf', 'Unbranded'];
+const BRANDS = ['Unbranded', 'Whiskers and Paws', 'Royal Feline', 'Meowarf'];
 const STORES = ['Fresh Pet', 'Expensive Cats', 'Overpriced Pets', 'Jungle of Money', 'Mom & Pop Petshop'];
 const MAX_DS_X = 1000;
 const EPOCHS = 30;
@@ -41,11 +41,42 @@ function generateData(numRows,
     // Generate price values based on weights (with minor variance)
     const weights = tf.randomUniform([numRows], wieghtRangeGrams.min, wieghtRangeGrams.max, 'float32');
 
-    const pricesTemp = weights.div(100);
+    const pricesTemp = weights.div(120);
     const priceMean = tf.mean(pricesTemp).arraySync(); // Mean weight
     const priceStd = tf.moments(pricesTemp).variance.sqrt().arraySync();
     const priceNoise = tf.randomNormal([numRows], priceMean, priceStd, 'float32');
-    const prices = pricesTemp.add(priceMean).add(priceNoise);
+    let prices = tf.tensor1d(pricesTemp.add(priceMean).add(priceNoise).arraySync());
+
+    // Apply logic and transform each number
+    prices = tf.tensor1d(prices.dataSync().map((value, index) => {
+        const brandLabel = brandLabels[index];
+        let newPrice = value;
+        switch (brandLabel) {
+            case 'Unbranded':
+                newPrice *= 0.82;
+                break;
+
+            case 'Royal Feline':
+                newPrice *= 1.12;
+                newPrice += 10;
+                break;
+
+            case 'Whiskers and Paws':
+                newPrice *= 1.45;
+                newPrice += 25;
+                break;
+
+            case 'Meowarf':
+                newPrice *= 1.60;
+                newPrice += 50;
+                break;
+
+            default:
+                throw new Error(brandLabel);
+        }
+        return newPrice;
+    }));
+
 
     const data = {
         weight: weights.arraySync(),
@@ -114,10 +145,22 @@ function dataEDA(data) {
     plot(weightData, weightLayout);
 
     // Scatter plot of weight vs. price
-    const scatterData = [
+    let scatterData = [
         { x: weight, y: priceUSD, mode: 'markers', type: 'scatter' },
     ];
-    const scatterLayout = { title: 'Weight vs. Price', xaxis: { title: 'Weight' }, yaxis: { title: 'Price' } };
+    let scatterLayout = { title: 'Weight vs. Price', xaxis: { title: 'Weight' }, yaxis: { title: 'Price' } };
+    plot(scatterData, scatterLayout);
+
+    scatterData = [
+        { x: brand, y: priceUSD, mode: 'markers', type: 'scatter' },
+    ];
+    scatterLayout = { title: 'Brand vs. Price', xaxis: { title: 'Brand' }, yaxis: { title: 'Price' } };
+    plot(scatterData, scatterLayout);
+
+    scatterData = [
+        { x: storeLocation, y: priceUSD, mode: 'markers', type: 'scatter' },
+    ];
+    scatterLayout = { title: 'Store vs. Price', xaxis: { title: 'Store' }, yaxis: { title: 'Price' } };
     plot(scatterData, scatterLayout);
 
     // Box plot of price
@@ -128,19 +171,14 @@ function dataEDA(data) {
     // Bar chart of a categorical feature
     const brandCounts = _countUniqueLabels(brand);
     const locCounts = _countUniqueLabels(storeLocation);
-
     const brandLabels = Object.keys(brandCounts);
     const locLabels = Object.keys(locCounts);
-
     const brandData = brandLabels.map(label => brandCounts[label]);
     const locData = locLabels.map(label => locCounts[label]);
-
     const brandBar = [{ x: brandLabels, y: brandData, type: 'bar' }];
     const locBar = [{ x: locLabels, y: locData, type: 'bar' }];
-
     const brandLayout = { title: 'Brand Distribution' };
     const locLayout = { title: 'Location Distribution' };
-
     plot(locBar, brandLayout);
     plot(brandBar, locLayout);
 
@@ -149,6 +187,7 @@ function dataEDA(data) {
     priceOverTime.sort((a, b) => a.x - b.x); // Sort by date in ascending order
     const lineData = [{ x: priceOverTime.map(entry => entry.x), y: priceOverTime.map(entry => entry.y), type: 'scatter' }];
     const lineLayout = { title: 'Price Over Time', xaxis: { type: 'date' }, yaxis: { title: 'Price' } };
+
     plot(lineData, lineLayout);
 }
 
@@ -191,12 +230,12 @@ function cleanTrainSpitData(data, trainRatio = 0.7, testRatio = 0.1, valRatio = 
 
     // Remove irrelevant features (date in this case) and NaNs
     const cleanedAndNormalizedData = { weight: [], brandOHE: [], storeOHE: [], priceUSD: [] };
+
     for (let i = 0; i < data.weight.length; i++) {
         // Handle missing values if needed
-        if (!isNaN(data.weight[i]) && !isNaN(data.priceUSD[i]) && data.storeLocation[i] && data.brand[i]) {
+        if (!isNaN(data.weight[i]) && !isNaN(data.priceUSD[i]) && (data.brand[i])) {
             cleanedAndNormalizedData.weight.push(data.weight[i]);
             cleanedAndNormalizedData.brandOHE.push(data.brand[i]);
-            cleanedAndNormalizedData.storeOHE.push(data.storeLocation[i]);
             cleanedAndNormalizedData.priceUSD.push(data.priceUSD[i]);
         }
     }
@@ -204,7 +243,6 @@ function cleanTrainSpitData(data, trainRatio = 0.7, testRatio = 0.1, valRatio = 
     // Normalize the Data
     cleanedAndNormalizedData.weight = _normalizeFeature(cleanedAndNormalizedData.weight, 'weight');
     cleanedAndNormalizedData.brandOHE = oneHotEncode(cleanedAndNormalizedData.brandOHE);
-    cleanedAndNormalizedData.storeOHE = oneHotEncode(cleanedAndNormalizedData.storeOHE);
     cleanedAndNormalizedData.priceUSD = _normalizeFeature(cleanedAndNormalizedData.priceUSD, 'priceUSD');
 
     const { weight, brandOHE, storeOHE, priceUSD } = cleanedAndNormalizedData;
@@ -216,19 +254,16 @@ function cleanTrainSpitData(data, trainRatio = 0.7, testRatio = 0.1, valRatio = 
     const trainData = {
         weight: weight.slice([0], [trainIndex]),
         brandOHE: brandOHE.slice([0], [trainIndex]),
-        storeOHE: storeOHE.slice([0], [trainIndex]),
         priceUSD: priceUSD.slice([0], [trainIndex])
     };
     const validationData = {
         weight: weight.slice([trainIndex], [valSize]),
         brandOHE: brandOHE.slice([trainIndex], [valSize]),
-        storeOHE: storeOHE.slice([trainIndex], [valSize]),
         priceUSD: priceUSD.slice([trainIndex], [valSize])
     };
     const testData = {
         weight: weight.slice([testIndex]),
         brandOHE: brandOHE.slice([testIndex]),
-        storeOHE: storeOHE.slice([testIndex]),
         priceUSD: priceUSD.slice([testIndex])
     };
 
@@ -251,8 +286,7 @@ async function buildLinearRegressionModel(trainData, validationData, testData, e
     const trainX = tf.tensor2d(
         tf.concat([
             tf.tensor2d(weight.arraySync(), [weight.arraySync().length, 1]),
-            tf.tensor2d(brandOHE.arraySync()),
-            tf.tensor2d(storeOHE.arraySync())], 1)
+            tf.tensor2d(brandOHE.arraySync())], 1)
             .arraySync());
     const trainY = tf.tensor1d(priceUSD.arraySync());
 
@@ -282,8 +316,7 @@ async function buildLinearRegressionModel(trainData, validationData, testData, e
     const testX = tf.tensor2d(
         tf.concat([
             tf.tensor2d(testWeight.arraySync(), [testWeight.arraySync().length, 1]),
-            tf.tensor2d(testBrandOHE.arraySync()),
-            tf.tensor2d(testStoreOHE.arraySync())], 1)
+            tf.tensor2d(testBrandOHE.arraySync())], 1)
             .arraySync());
     const testY = tf.tensor1d(testPriceUSD.arraySync());
 
