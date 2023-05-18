@@ -1,0 +1,38 @@
+{
+  "name": "functions",
+  "description": "A cloud function serving a TFJS model.",
+  "author": "adamd",
+  "license": "CC-BY-NC-4.0",
+  "bugs": {
+    "url": "https://github.com/adamd1985/firebase-tfjs-modelfunction/issues"
+  },
+  "homepage": "https://github.com/adamd1985/firebase-tfjs-modelfunction#readme",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamd1985/firebase-tfjs-modelfunction.git"
+  },
+  "keywords": [
+    "Firebase",
+    "TensorflowJS",
+    "CloudFuncitons"
+  ],
+  "engines": {
+    "node": "18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^11.8.0",
+    "firebase-functions": "^4.3.1"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.1.0"
+  },
+  "private": true
+}

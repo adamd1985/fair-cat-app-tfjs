@@ -1,0 +1,35 @@
+{
+  "name": "tfjs-analysis",
+  "description": "Model and data analysis done here.",
+  "author": "adamd",
+  "license": "CC-BY-NC-4.0",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/adamd1985/firebase-tfjs-modelfunction/issues"
+  },
+  "homepage": "https://github.com/adamd1985/firebase-tfjs-modelfunction#readme",
+  "scripts": {
+    "start": "npm run shell"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adamd1985/firebase-tfjs-modelfunction.git"
+  },
+  "keywords": [
+    "Firebase",
+    "TensorflowJS"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "@tensorflow/tfjs": "^4.6.0",
+    "@tensorflow/tfjs-node": "^4.6.0",
+    "@tensorflow/tfjs-vis": "^1.5.1",
+    "nodeplotlib": "^1.1.2",
+    "plotly": "^1.0.6",
+    "plotly.js-dist": "^2.23.1"
+  },
+  "private": true
+}
