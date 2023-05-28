@@ -11,8 +11,9 @@ const { tidy, tensor2d } = tf;
 // Constants
 const BRANDS = ['Unbranded', 'Whiskers and Paws', 'Royal Feline', 'Meowarf'];
 const STORES = ['Fresh Pet', 'Expensive Cats', 'Overpriced Pets', 'Jungle of Money', 'Mom & Pop Petshop'];
-const MAX_DS_X = 1000;
-const EPOCHS = 30;
+const MAX_DS_X = 1500;
+const EPOCHS = 45;
+const DATASETS_METADATA = {};
 
 /**
  * Generates random cat food data, either as normal or uniform data.
@@ -95,12 +96,15 @@ function generateData(numRows,
  * @param {*} labels 
  * @returns 
  */
-function oneHotEncode(labels) {
-    const uniqueLabels = Array.from(new Set(labels));
-    const numCategories = uniqueLabels.length;
+function oneHotEncode(labels, labelConstants, featureName) {
+    let encodedTensor = null;
+    const encodedLabels = labels.map(label => labelConstants.indexOf(label));
 
-    const encodedLabels = labels.map(label => uniqueLabels.indexOf(label));
-    const encodedTensor = tf.oneHot(tf.tensor1d(encodedLabels, 'int32'), numCategories);
+    if (!DATASETS_METADATA[`${featureName}_OHE`]) {
+        DATASETS_METADATA[`${featureName}_OHE`] = encodedLabels;
+    }
+
+    encodedTensor = tf.oneHot(tf.tensor1d(encodedLabels, 'int32'), labelConstants.length);
 
     return encodedTensor;
 }
@@ -191,10 +195,63 @@ function dataEDA(data) {
     plot(lineData, lineLayout);
 }
 
-// Const metadata for new input data.
-const DATASETS_METADATA = {
 
-};
+
+
+/**
+ * Normalize to their relative wieghts.
+ * 
+ * @see DATASETS_METADATA
+ * @param feature A tensor with the features to be normalized.
+ * @param featureName The feature name
+ * @param min Minimum value to be used in the normalization. Defaults to NULL. If Null it will save the value fromt the given feature range using metadata.
+ * @param max Maximum value to be used in the normalization. Defaults to NULL. If Null it will save the value fromt the given feature range using metadata.
+ * @param metaData Meta data to save features.
+ * @returns {Array[*]} The normalized range.
+ */
+function normalizeFeature(feature, featureName, metaData = DATASETS_METADATA) {
+    let min = null;
+    let max = null;
+
+    // We will need to normalize input data with the same constants.
+    if (!metaData[`${featureName}_norm`]) {
+        min = tf.min(feature);
+        max = tf.max(feature);
+        metaData[`${featureName}_norm`] = { min: min, max: max };
+    } else {
+        min = metaData[`${featureName}_norm`].min;
+        max = metaData[`${featureName}_norm`].max;
+    }
+
+    const normalizedFeature = tf.div(tf.sub(feature, min), tf.sub(max, min));
+
+    return normalizedFeature;
+}
+
+/**
+ * Scale to a range of large magnitude.
+ * 
+ * @see DATASETS_METADATA
+ * @returns {Array[*]} The scaled tensor.
+ */
+function scaleFeature(feature, featureName, metaData = DATASETS_METADATA) {
+    let mean = null;
+    let std = null;
+
+    // We will need to normalize input data with the same constants.
+    if (!metaData[`${featureName}_norm`]) {
+        mean = tf.mean(feature);
+        std = tf.moments(feature).variance.sqrt().arraySync();
+        metaData[`${featureName}_norm`] = { mean: mean, std: std };
+    } else {
+        mean = metaData[`${featureName}_norm`].mean;
+        std = metaData[`${featureName}_norm`].std;
+    }
+
+    const scaledFeature = tf.div(tf.sub(feature, mean), std);
+
+    return scaledFeature;
+}
 
 /**
  * Cleans, nromalizes and drops irrelavant data. Then splits the data into train, validate, test sets.
@@ -211,23 +268,6 @@ const DATASETS_METADATA = {
  */
 function cleanTrainSpitData(data, trainRatio = 0.7, testRatio = 0.1, valRatio = 0.2) {
 
-    /**
-     * local function to noramlize a range, will save the mins and maxs to a global cache to be used in a prediction.
-     * 
-     * @see MINIMUMS
-     * @returns {Array[*]} The normalized range.
-     */
-    function _normalizeFeature(feature, featureName, metaData = DATASETS_METADATA) {
-        const min = tf.min(feature);
-        const max = tf.max(feature);
-        const normalizedFeature = tf.div(tf.sub(feature, min), tf.sub(max, min));
-
-        // We will need to normalize input data with the same constants.
-        metaData[featureName] = { min: min, max: max };
-
-        return normalizedFeature;
-    }
-
     // Remove irrelevant features (date in this case) and NaNs
     const cleanedAndNormalizedData = { weight: [], brandOHE: [], storeOHE: [], priceUSD: [] };
 
@@ -241,9 +281,9 @@ function cleanTrainSpitData(data, trainRatio = 0.7, testRatio = 0.1, valRatio = 
     }
 
     // Normalize the Data
-    cleanedAndNormalizedData.weight = _normalizeFeature(cleanedAndNormalizedData.weight, 'weight');
-    cleanedAndNormalizedData.brandOHE = oneHotEncode(cleanedAndNormalizedData.brandOHE);
-    cleanedAndNormalizedData.priceUSD = _normalizeFeature(cleanedAndNormalizedData.priceUSD, 'priceUSD');
+    cleanedAndNormalizedData.weight = normalizeFeature(cleanedAndNormalizedData.weight, 'weight');
+    cleanedAndNormalizedData.brandOHE = oneHotEncode(cleanedAndNormalizedData.brandOHE, BRANDS, 'brand');
+    cleanedAndNormalizedData.priceUSD = tf.tensor1d(cleanedAndNormalizedData.priceUSD);
 
     const { weight, brandOHE, storeOHE, priceUSD } = cleanedAndNormalizedData;
     const totalSize = weight.shape[0];
@@ -295,16 +335,17 @@ async function buildLinearRegressionModel(trainData, validationData, testData, e
 
     const model = tf.sequential();
     model.add(tf.layers.dense({
-        units: trainX.shape[0],
-        activation: 'sigmoid',
+        units: 32,
+        activation: 'relu',
         inputShape: [trainX.shape[1]]
     }));
-    model.add(tf.layers.dense({ units: trainX.shape[0] / 2, activation: 'sigmoid' }));
+    model.add(tf.layers.dense({ units: 16, activation: 'relu' }));
+    model.add(tf.layers.dense({ units: 8, activation: 'relu' }));
     model.add(tf.layers.dense({ units: 1, activation: 'linear' }));
     model.compile({
         optimizer: 'adam',
         loss: 'meanSquaredError',
-        metrics: ['accuracy']
+        metrics: ['mse', 'mae']
     });
 
     const history = await model.fit(trainX, trainY, { validationData: validationData, epochs: epochs });
@@ -339,13 +380,15 @@ async function buildLinearRegressionModel(trainData, validationData, testData, e
  * @param {*} testData 
  */
 async function modelMetrics(modelMetaData) {
-    const accuracy = tf.metrics.binaryAccuracy(modelMetaData.trueValues, modelMetaData.predictions);
-    const error = tf.metrics.meanAbsoluteError(modelMetaData.trueValues, modelMetaData.predictions);
+    // Calculate the mean absolute error (MAE)
+    const maeTensor = tf.metrics.meanAbsoluteError(modelMetaData.trueValues, modelMetaData.predictions);
+    const maeValue = await maeTensor.data();
+    console.log('Mean Absolute Error (MAE):', maeValue[0]);
 
-    console.log(`Accuracy: ${accuracy.arraySync()[accuracy.arraySync().length - 1] * 100}%`);
-    console.log(`Error: ${error.arraySync()[error.arraySync().length - 1] * 100}%`);
-
-    console.log(`Loss: ${[modelMetaData.history.loss.length - 1]}%`);
+    // Calculate the mean squared error (MSE)
+    const mseTensor = tf.metrics.meanSquaredError(modelMetaData.trueValues, modelMetaData.predictions);
+    const mseValue = await mseTensor.data();
+    console.log('Mean Squared Error (MSE):', mseValue[0]);
 }
 
 
@@ -368,6 +411,21 @@ function main() {
 
         console.log('Get Model Metrics');
         await modelMetrics(modelMetaData, datasets.trainData);
+
+        console.log('Testing the model on inputs');
+        const brand = oneHotEncode([BRANDS[1]], BRANDS, 'brand');
+        const wieghtInGrams = 5000;
+        const wieght = normalizeFeature([wieghtInGrams], 'weight');
+
+        const x = tf.tensor2d(
+            tf.concat([
+                tf.tensor2d(wieght.arraySync(), [wieght.arraySync().length, 1]),
+                tf.tensor2d(brand.arraySync())], 1)
+                .arraySync());
+
+        const prediciton = await modelMetaData.model.predict(x);
+
+        console.log(`Predicted: '$${prediciton.dataSync()}' for a brand: '${BRANDS[1]}' and weight: '${wieghtInGrams}g'`);
     })();
 }
 
