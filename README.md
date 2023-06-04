@@ -509,3 +509,104 @@ Which give us these results:
 ![alt](./article/modeEval.PNG)
 
 Yikes! What terrible results. Nonetheless, we trained this model on unrealistic data. Garbage-in-garbage-out so they say. Let's continue with firebase.
+
+# Warn Up the API
+
+When you have a model on a serverless setup, it's always good to warm it up.
+
+We will do this with the loadModel function:
+
+```javascript
+/**
+ * Loads meta data and model.
+ * 
+ * Once loaded, warm up model with sample prediciton.
+ */
+function loadModel() {
+    fs.readFile(`${FUNCTION_MODEL_PATH}/meta.json`, (err, data) => {
+        if (err) throw err;
+
+        logger.info(`Model metadata loaded ${data}`);
+
+        DATASETS_METADATA = JSON.parse(data);
+
+        const brand = oneHotEncode([BRANDS[1]], BRANDS, 'brand');
+        const wieghtInGrams = tf.tensor1d([5000]);
+        const wieght = normalizeFeature(wieghtInGrams, 'weight');
+
+        tf.loadLayersModel(tfn.io.fileSystem(`${FUNCTION_MODEL_PATH}/model.json`))
+            .then((loadedModel) => {
+                logger.info(`Model loaded ${loadedModel}, predicting sample: `);
+
+                const x = tf.tensor2d(
+                    tf.concat([
+                        tf.tensor2d(wieght.arraySync(), [wieght.arraySync().length, 1]),
+                        tf.tensor2d(brand.arraySync())], 1)
+                        .arraySync());
+                MODEL = loadedModel;
+
+                return MODEL.predict(x);
+            }).then((prediction) => {
+                logger.info(`Predicted: '$${prediction}' for a brand: '${BRANDS[1]}' and weight: '${wieghtInGrams}g'`);
+            });
+    });
+
+}
+
+loadModel();
+```
+
+
+We must not forget to bring along the utility functions to normalize and oneHotEncode, and also the metadata with from the trained model: OHE data and min/max wieghts for normalization. 
+On the CLI, type `eumlators:run`, and go to the function url (should be something like: http://127.0.0.1:5001/cloudfunctions-f2309/us-central1/catFoodPredictor). Assuming the emulator in prot 4000, if you access http://127.0.0.1:4000/logs you should see the warmup prediction:
+
+![Warmup](./article/hotloadedModelFirebase.PNG)
+
+Now we serve the model within an API:
+
+```javascript
+/**
+ * POST only, predicts the price of the catfood item.
+ */
+exports.catFoodPredictor = onRequest(async (req, res) => {
+    if (req.method !== 'POST') {
+        return res.status(400).json({ error: 'Invalid request method. Only POST requests are allowed.' });
+    }
+
+    const data = req.body;
+    logger.info(`Received this: ${JSON.stringify(data)}`);
+
+
+    await database.ref('telemetry').push({
+        data: JSON.stringify(data),
+        timestamp: Date.now(),
+    });
+
+    logger.info(`Received this: ${data.brand} and ${data.weight}`);
+
+    const brand = oneHotEncode([data.brand], BRANDS, 'brand');
+    const weightInGrams = tf.tensor1d([data.weight]);
+    const weight = normalizeFeature(weightInGrams, 'weight');
+
+    const x = tf.tensor2d(
+        tf.concat([
+            tf.tensor2d(weight.arraySync(), [weight.arraySync().length, 1]),
+            tf.tensor2d(brand.arraySync())], 1)
+            .arraySync());
+
+    try {
+        const prediciton = MODEL.predict(x).arraySync()[0];
+        res.status(200).json({ prediciton: prediciton });
+
+        logger.info(`Predicted this: ${JSON.stringify(prediciton)}`);
+    }
+    catch (err) {
+        console.error('Error adding data:', error);
+        res.status(500).json({ error: 'Something went wrong. Please try again later.' });
+    }
+});
+```
+
+Using POSTMAN, we can test this emulated function, and the result is as follows:
+
+![Postman](./article/postmanTest.PNG)

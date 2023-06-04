@@ -6,15 +6,16 @@
 import * as tf from '@tensorflow/tfjs-node'
 import { plot } from 'nodeplotlib';
 import Plot from 'nodeplotlib';
+import * as fs from 'fs';
 const { tidy, tensor2d } = tf;
 
 // Constants
 const BRANDS = ['Unbranded', 'Whiskers and Paws', 'Royal Feline', 'Meowarf'];
 const STORES = ['Fresh Pet', 'Expensive Cats', 'Overpriced Pets', 'Jungle of Money', 'Mom & Pop Petshop'];
 const MAX_DS_X = 1500;
-const EPOCHS = 45;
+const EPOCHS = 15;
 const DATASETS_METADATA = {};
-
+const FUNCTION_MODEL_PATH = "./functions/models"
 /**
  * Generates random cat food data, either as normal or uniform data.
  * 
@@ -217,7 +218,7 @@ function normalizeFeature(feature, featureName, metaData = DATASETS_METADATA) {
     if (!metaData[`${featureName}_norm`]) {
         min = tf.min(feature);
         max = tf.max(feature);
-        metaData[`${featureName}_norm`] = { min: min, max: max };
+        metaData[`${featureName}_norm`] = { min: min.dataSync()[0], max: max.dataSync()[0] };
     } else {
         min = metaData[`${featureName}_norm`].min;
         max = metaData[`${featureName}_norm`].max;
@@ -426,6 +427,11 @@ function main() {
         const prediciton = await modelMetaData.model.predict(x);
 
         console.log(`Predicted: '$${prediciton.dataSync()}' for a brand: '${BRANDS[1]}' and weight: '${wieghtInGrams}g'`);
+        console.log(`Saving the model to the firebase function dir: ${FUNCTION_MODEL_PATH}`);
+        await modelMetaData.model.save(tf.io.fileSystem(FUNCTION_MODEL_PATH));
+
+        let modelMetaJSON = JSON.stringify(DATASETS_METADATA);
+        fs.writeFileSync(`${FUNCTION_MODEL_PATH}/meta.json`, modelMetaJSON);
     })();
 }
 
