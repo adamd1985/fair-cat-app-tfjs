@@ -607,6 +607,60 @@ exports.catFoodPredictor = onRequest(async (req, res) => {
 });
 ```
 
-Using POSTMAN, we can test this emulated function, and the result is as follows:
+Using POSTMAN, we can test this emulated function, with this result:
 
 ![Postman](./article/postmanTest.PNG)
+
+Finally we can launch to Firebase! Deploy the functions and the analytics database we setup as using the command:
+
+`firebase deploy`
+
+If we navigate to our google cloud dashboard and find the logs tab, we can see that the function loaded and the model has been warmed up:
+
+![googe cloud log](./article/cloudFunctionLog.PNG)
+
+Now the postman test:
+
+![FB Prediction](./article/firebasePredictionSuccess.PNG)
+
+# Predictions in your Pocket
+
+With our successful deployment of the model to firebase, we want its utility to be more portable. Here we will create a React app. and using Capacitor (from the past article on how to build android apps [here](https://medium.com/call-for-atlas/vuejs-and-capacitor-portable-mobile-apps-made-easy-d14bce8b53a)) we will install it our mobile device.
+
+First we bootstrap the app and go through the prompts:
+
+`npx create-next-app`
+
+We selected a simple next.js typescript project without the need for routers. CD to the newly created folder and test the app with `npm run dev` to see the standard Next.js welcome page on your browser.
+
+The app we will create will be a simple form, with a select for catfood brands and a numeric counter for their weight in grams. This is the entire source code:
+
+# Conclusion
+
+TODO
+
+## References
+
+- https://firebase.google.com/docs/functions
+- https://www.tensorflow.org/js 
+- https://medium.com/call-for-atlas/vuejs-and-capacitor-portable-mobile-apps-made-easy-d14bce8b53a
+- https://react.dev/learn
+- https://capacitorjs.com/solution/react
+
+
+## Github
+
+Article and sourc code here is available on [Github](https://github.com/adamd1985/firebase-tfjs-modelfunction)
+
+
+## Media
+
+All media used (in the form of code or images) are either solely owned by me, acquired through licensing, or part of the Public Domain and granted use through Creative Commons License.
+
+## CC Licensing and Use
+
+<a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-nc/4.0/88x31.png" /></a><br />This work is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-nc/4.0/">Creative Commons Attribution-NonCommercial 4.0 International License</a>.
+
+#
+
+<div align="right">Made with :heartpulse: by <b>Adam</b></div>
